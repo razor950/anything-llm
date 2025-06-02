@@ -99,6 +99,7 @@ class AnthropicLLM {
       {
         role: "user",
         content: this.#generateContent({ userPrompt, attachments }),
+        cache_control: { type: 'ephemeral', ttl: '5m' },
       },
     ];
   }
