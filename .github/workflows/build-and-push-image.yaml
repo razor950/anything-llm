@@ -1,11 +1,12 @@
 name: Publish AnythingLLM Primary Docker image (amd64)
 
-on:
+on: 
   push:
     branches: [ master ]
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
