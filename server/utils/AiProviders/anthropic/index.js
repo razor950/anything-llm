@@ -90,6 +90,7 @@ class AnthropicLLM {
     const prompt = {
       role: "system",
       content: `${systemPrompt}${this.#appendContext(contextTexts)}`,
+      cache_control: { type: 'ephemeral', ttl: '5m' }, 
     };
 
     return [
@@ -111,7 +112,10 @@ class AnthropicLLM {
           system: messages[0].content, // Strip out the system message
           messages: messages.slice(1), // Pop off the system message
           temperature: Number(temperature ?? this.defaultTemp),
-        })
+        },          
+        { 
+          headers: { "anthropic-beta": "extended-cache-ttl-2025-04-11" }
+        }),
       );
 
       const promptTokens = result.output.usage.input_tokens;
@@ -140,7 +144,11 @@ class AnthropicLLM {
         system: messages[0].content, // Strip out the system message
         messages: messages.slice(1), // Pop off the system message
         temperature: Number(temperature ?? this.defaultTemp),
-      }),
+      },          
+        { 
+          headers: { "anthropic-beta": "extended-cache-ttl-2025-04-11" }
+        },
+      ),
       messages,
       false
     );
