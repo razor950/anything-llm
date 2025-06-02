@@ -87,10 +87,18 @@ class AnthropicLLM {
     userPrompt = "",
     attachments = [], // This is the specific attachment for only this prompt
   }) {
-    const prompt = {
-      role: "system",
-      content: `${systemPrompt}${this.#appendContext(contextTexts)}`,
-      cache_control: { type: 'ephemeral', ttl: '5m' }, 
+
+    const systemContent = `${systemPrompt}${this.#appendContext(contextTexts)}`;
+    const prompt = 
+    {
+        role: "system",
+        content: [
+          {
+            type: "text",
+            text: systemContent,
+            cache_control: { type: "ephemeral" }, // Cache the system prompt + context
+          }
+        ]
     };
 
     return [
@@ -99,7 +107,6 @@ class AnthropicLLM {
       {
         role: "user",
         content: this.#generateContent({ userPrompt, attachments }),
-        cache_control: { type: 'ephemeral', ttl: '5m' },
       },
     ];
   }
