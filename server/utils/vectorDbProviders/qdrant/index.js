@@ -13,11 +13,13 @@ const QDrant = {
    * Enhanced connection method with better error handling and configuration
    */
   connect: async function () {
+    if (process.env.VECTOR_DB !== "qdrant")
+      throw new Error("QDrant::Invalid ENV settings");
+
     const config = {
       url: process.env.QDRANT_ENDPOINT,
       timeout: parseInt(process.env.QDRANT_TIMEOUT) || 300_000, // 5 minutes default
       maxConnections: parseInt(process.env.QDRANT_MAX_CONNECTIONS) || 25,
-      checkCompatibility: process.env.QDRANT_CHECK_COMPATIBILITY !== "false",
       ...(process.env.QDRANT_API_KEY
         ? { apiKey: process.env.QDRANT_API_KEY }
         : {}),
@@ -34,45 +36,18 @@ const QDrant = {
 
     const client = new QdrantClient(config);
 
-    try {
-      // Use versionInfo instead of cluster status for better compatibility
-      const info = await client.versionInfo();
-      if (!info?.version) {
-        throw new Error("QDrant::Unable to verify server version");
-      }
-      console.log(`QDrant::Connected to server version ${info.version}`);
-    } catch (error) {
-      if (error.name === "QdrantClientTimeoutError") {
-        throw new Error(
-          "QDrant::Connection timeout - server may be overloaded"
-        );
-      } else if (error.name === "QdrantClientResourceExhaustedError") {
-        throw new Error(
-          `QDrant::Server resources exhausted, retry after ${error.retry_after}s`
-        );
-      }
-      throw new Error(`QDrant::Connection failed - ${error.message}`);
-    }
+    const isAlive = (await client.api("cluster")?.clusterStatus())?.ok || false;
+    if (!isAlive)
+      throw new Error(
+        "QDrant::Invalid Heartbeat received - is the instance online?"
+      );
 
     return { client };
   },
 
   heartbeat: async function () {
-    const { client } = await this.connect();
-    try {
-      const info = await client.versionInfo();
-      return {
-        heartbeat: Number(new Date()),
-        version: info.version,
-        status: "healthy",
-      };
-    } catch (error) {
-      return {
-        heartbeat: Number(new Date()),
-        status: "unhealthy",
-        error: error.message,
-      };
-    }
+    await this.connect();
+    return { heartbeat: Number(new Date()) };
   },
 
   totalVectors: async function () {
