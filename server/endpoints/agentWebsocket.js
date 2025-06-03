@@ -17,6 +17,8 @@ function relayToSocket(message) {
 function agentWebsocket(app) {
   if (!app) return;
 
+  require("@mintplex-labs/express-ws").default(app);
+
   app.ws("/agent-invocation/:uuid", async function (socket, request) {
     try {
       const agentHandler = await new AgentHandler({
