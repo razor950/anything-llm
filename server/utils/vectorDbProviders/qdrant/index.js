@@ -5,6 +5,7 @@ const { storeVectorResult, cachedVectorInformation } = require("../../files");
 const { v4: uuidv4 } = require("uuid");
 const { toChunks, getEmbeddingEngineSelection } = require("../../helpers");
 const { sourceIdentifier } = require("../../chats");
+const { NativeEmbeddingReranker } = require("../../EmbeddingRerankers/native");
 
 const QDrant = {
   name: "QDrant",
@@ -92,9 +93,9 @@ const QDrant = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
-    rerank = false,
-    searchStrategy = "vector", // "vector", "hybrid", "discovery"
-    contextPairs = [], // For discovery search
+    rerank = true,
+    searchStrategy = "vector",
+    contextPairs = [],
   }) {
     if (!namespace || !input || !LLMConnector)
       throw new Error("Invalid request to performSimilaritySearch.");
@@ -109,11 +110,9 @@ const QDrant = {
     }
 
     const queryVector = await LLMConnector.embedTextInput(input);
-
     let searchResults;
 
     if (searchStrategy === "discovery" && contextPairs.length > 0) {
-      // Use discovery search for context-aware results
       searchResults = await this.performDiscoverySearch({
         client,
         namespace,
@@ -124,7 +123,6 @@ const QDrant = {
         filterIdentifiers,
       });
     } else if (searchStrategy === "hybrid") {
-      // Use the new query API for hybrid search
       searchResults = await this.performHybridSearch({
         client,
         namespace,
@@ -135,7 +133,6 @@ const QDrant = {
         filterIdentifiers,
       });
     } else {
-      // Standard vector search
       searchResults = await this.similarityResponse({
         client,
         namespace,
@@ -146,39 +143,37 @@ const QDrant = {
       });
     }
 
-    // Apply reranking if requested and we have results
-    if (rerank && searchResults.contextTexts.length > 0) {
-      try {
-        const { getEmbeddingRerankerClass } = require("../../helpers");
-        const Reranker = getEmbeddingRerankerClass();
-        if (Reranker) {
-          const reranker = new Reranker();
-          const rerankedResults = await reranker.rerank(
-            input,
-            searchResults.sourceDocuments,
-            { topK: topN }
-          );
+    // Apply reranking if requested
+    if (rerank) {
+      const reranker = new NativeEmbeddingReranker();
+      const documents = searchResults.contextTexts.map((text, i) => ({
+        text,
+        ...searchResults.sourceDocuments[i],
+      }));
 
-          // Rebuild results from reranked data
-          searchResults.contextTexts = rerankedResults.map((doc) => doc.text);
-          searchResults.sourceDocuments = rerankedResults;
-          searchResults.scores = rerankedResults.map((doc) => doc.rerank_score);
-        }
+      try {
+        const rerankedResults = await reranker.rerank(input, documents, {
+          topK: topN,
+        });
+
+        return {
+          contextTexts: rerankedResults.map((doc) => doc.text),
+          sources: this.curateSources(rerankedResults),
+          message: false,
+        };
       } catch (error) {
-        console.warn(
-          "QDrant::Reranking failed, using original results:",
-          error.message
-        );
+        console.error("Reranking failed, using original results:", error);
       }
     }
 
-    const sources = searchResults.sourceDocuments.map((metadata, i) => {
-      return { ...metadata, text: searchResults.contextTexts[i] };
-    });
-
     return {
       contextTexts: searchResults.contextTexts,
-      sources: this.curateSources(sources),
+      sources: this.curateSources(
+        searchResults.sourceDocuments.map((metadata, i) => ({
+          ...metadata,
+          text: searchResults.contextTexts[i],
+        }))
+      ),
       message: false,
     };
   },
@@ -312,7 +307,7 @@ const QDrant = {
   },
 
   /**
-   * Enhanced similarity response with better error handling
+   * Enhanced similarity response using the query API with fallback to search
    */
   similarityResponse: async function ({
     client,
@@ -329,12 +324,30 @@ const QDrant = {
     };
 
     try {
-      const responses = await client.search(namespace, {
-        vector: queryVector,
-        limit: topN,
-        with_payload: true,
-        score_threshold: similarityThreshold,
-      });
+      // Try to use the query API first (newer QDrant versions)
+      let responses;
+      try {
+        const queryResult = await client.query(namespace, {
+          query: queryVector,
+          limit: topN,
+          with_payload: true,
+          score_threshold: similarityThreshold,
+        });
+
+        // Handle query API response format
+        responses = queryResult.points || queryResult;
+      } catch (queryError) {
+        // Fallback to search API for older QDrant versions
+        console.log(
+          "QDrant::Query API not available, falling back to search API"
+        );
+        responses = await client.search(namespace, {
+          vector: queryVector,
+          limit: topN,
+          with_payload: true,
+          score_threshold: similarityThreshold,
+        });
+      }
 
       responses.forEach((response) => {
         if (response.score < similarityThreshold) return;
