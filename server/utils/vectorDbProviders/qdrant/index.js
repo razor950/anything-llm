@@ -144,28 +144,28 @@ const QDrant = {
     }
 
     // Apply reranking if requested
-    if (rerank) {
-      const reranker = new NativeEmbeddingReranker();
-      const documents = searchResults.contextTexts.map((text, i) => ({
-        text,
-        ...searchResults.sourceDocuments[i],
+    if (rerank && searchResults.contextTexts.length > 0) {
+      const documentsToRerank = searchResults.sourceDocuments.map((doc, i) => ({
+        text: searchResults.contextTexts[i],
+        ...doc,
       }));
 
-      try {
-        const rerankedResults = await reranker.rerank(input, documents, {
-          topK: topN,
-        });
+      const reranker = new NativeEmbeddingReranker();
+      const rerankedResults = await reranker.rerank(input, documentsToRerank, {
+        topK: topN,
+      });
 
-        console.log("Reranking worked, returning reranked results.");
+      console.log("Reranking worked, returning reranked results.");
 
-        return {
-          contextTexts: rerankedResults.map((doc) => doc.text),
-          sources: this.curateSources(rerankedResults),
-          message: false,
-        };
-      } catch (error) {
-        console.error("Reranking failed, using original results:", error);
-      }
+      return {
+        contextTexts: rerankedResults.map((doc) => doc.text),
+        sources: this.curateSources(rerankedResults),
+        message: false,
+      };
+    } else {
+      console.log(
+        "Reranking not requested or no context texts found, returning original results."
+      );
     }
 
     return {
