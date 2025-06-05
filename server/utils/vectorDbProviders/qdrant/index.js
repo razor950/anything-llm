@@ -93,7 +93,7 @@ const QDrant = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
-    rerank = true,
+    rerank = false,
     searchStrategy = "vector",
     contextPairs = [],
   }) {
@@ -155,6 +155,8 @@ const QDrant = {
         const rerankedResults = await reranker.rerank(input, documents, {
           topK: topN,
         });
+
+        console.log("Reranking worked, returning reranked results.");
 
         return {
           contextTexts: rerankedResults.map((doc) => doc.text),
