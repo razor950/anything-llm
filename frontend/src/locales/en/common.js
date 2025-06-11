@@ -967,7 +967,7 @@ const TRANSLATIONS = {
     normal: "Normal",
     large: "Large",
     workspace_llm_manager: {
-      search: "Search LLM providers",Add commentMore actions
+      search: "Search LLM providers",
       loading_workspace_settings: "Loading workspace settings...",
       available_models: "Available Models for {{provider}}",
       available_models_description: "Select a model to use for this workspace.",
