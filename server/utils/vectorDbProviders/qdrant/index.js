@@ -93,7 +93,7 @@ const QDrant = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
-    rerank = false,
+    rerank = true,
     searchStrategy = "vector",
     contextPairs = [],
   }) {
