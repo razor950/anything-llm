@@ -253,20 +253,20 @@ const QDrant = {
     filterIdentifiers,
   }) {
     try {
-      const responses = await client.query(namespace, {
-        query: queryVector,
-        limit: topN,
-        with_payload: true,
-        score_threshold: similarityThreshold,
-        // Add text search as prefetch for hybrid results
+      const response = await client.query(namespace, {
         prefetch: [
           {
-            query: {
-              text: input,
-            },
+            query: queryVector, // Dense vector search
+            using: "dense", // Use default vector field
             limit: topN * 2,
+            score_threshold: similarityThreshold,
           },
         ],
+        query: {
+          fusion: "rrf", // Use RRF to combine results
+        },
+        limit: topN,
+        with_payload: true,
       });
 
       const result = {
@@ -275,20 +275,23 @@ const QDrant = {
         scores: [],
       };
 
-      responses.points.forEach((response) => {
-        if (filterIdentifiers.includes(sourceIdentifier(response?.payload))) {
+      const points = response.points || [];
+
+      points.forEach((point) => {
+        if (filterIdentifiers.includes(sourceIdentifier(point?.payload))) {
           console.log(
             "QDrant: A source was filtered from context as it's parent document is pinned."
           );
           return;
         }
 
-        result.contextTexts.push(response?.payload?.text || "");
+        result.contextTexts.push(point?.payload?.text || "");
         result.sourceDocuments.push({
-          ...(response?.payload || {}),
-          id: response.id,
+          ...(point?.payload || {}),
+          id: point.id,
+          score: point.score,
         });
-        result.scores.push(response.score);
+        result.scores.push(point.score);
       });
 
       return result;
@@ -330,14 +333,16 @@ const QDrant = {
       let responses;
       try {
         const queryResult = await client.query(namespace, {
-          query: queryVector,
+          query: {
+            nearest: queryVector, // Correct format for vector query
+          },
           limit: topN,
           with_payload: true,
           score_threshold: similarityThreshold,
         });
 
         // Handle query API response format
-        responses = queryResult.points || queryResult;
+        responses = queryResult.points || [];
       } catch (queryError) {
         // Fallback to search API for older QDrant versions
         console.log(
@@ -352,7 +357,10 @@ const QDrant = {
       }
 
       responses.forEach((response) => {
+        // Skip if score is below threshold (redundant check but safe)
         if (response.score < similarityThreshold) return;
+
+        // Skip if document is pinned
         if (filterIdentifiers.includes(sourceIdentifier(response?.payload))) {
           console.log(
             "QDrant: A source was filtered from context as it's parent document is pinned."
@@ -364,6 +372,7 @@ const QDrant = {
         result.sourceDocuments.push({
           ...(response?.payload || {}),
           id: response.id,
+          score: response.score,
         });
         result.scores.push(response.score);
       });

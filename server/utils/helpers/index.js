@@ -358,7 +358,7 @@ function getLLMProviderClass({ provider = null } = {}) {
   }
 }
 
-/**Add commentMore actions
+/**
  * Returns the defined model (if available) for the given provider.
  * @param {{provider: string | null} | null} params - Initialize params for LLMs provider
  * @returns {string | null}

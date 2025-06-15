@@ -96,7 +96,7 @@ class AnthropicLLM {
           {
             type: "text",
             text: systemContent,
-            cache_control: { type: "ephemeral" }, // Cache the system prompt + context
+            cache_control: { type: "ephemeral", ttl: "1h" } // Cache the system prompt + context
           }
         ]
     };
